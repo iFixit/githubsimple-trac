@@ -22,26 +22,36 @@ def is_svn_changeset_request(path_info):
         return is_svn_rev(m.group(1))
     return False
 
+def monkeypatch_trac_timeline():
+    def get_timeline_events(self, req, start, stop, filters):
+        return []
+    import trac.versioncontrol.web_ui.changeset
+    trac.versioncontrol.web_ui.changeset.ChangesetModule.get_timeline_events = get_timeline_events
+
 class GithubSimplePlugin(Component):
     implements(IRequestHandler, IRequestFilter, IWikiSyntaxProvider)
     
     browser = Option('githubsimple', 'browser', '', doc="""Place your GitHub Source Browser URL here to have the /browser entry point redirect to GitHub.""")
+    suppress_changesets = BoolOption('githubsimple', 'suppress_changesets', False, doc="""Suppress SVN changesets in the timeline view""")
 
     def __init__(self):
         self.env.log.debug("Browser: %s" % self.browser)
-    
+
+        if self.suppress_changesets:
+            monkeypatch_trac_timeline()
+
     # This has to be done via the pre_process_request handler
     # Seems that the /browser request doesn't get routed to match_request :(
     def pre_process_request(self, req, handler):
         if self.browser:
             serve = req.path_info.startswith('/browser') \
-			and not is_svn_rev(req.args.get('rev'))
+                        and not is_svn_rev(req.args.get('rev'))
             self.env.log.debug("Handle Pre-Request /browser: %s" % serve)
             if serve:
                 self.processBrowserURL(req)
 
             serve2 = req.path_info.startswith('/changeset') \
-			and not is_svn_changeset_request(req.path_info)
+                        and not is_svn_changeset_request(req.path_info)
             self.env.log.debug("Handle Pre-Request /changeset: %s" % serve2)
             if serve2:
                 self.processChangesetURL(req)

@@ -32,12 +32,13 @@ To install this Trac Plugin:
 
         [githubsimple]
         browser = http://github.com/davglass/tree/master
+        suppress_changesets = true
         
     4. All done.
 
 
-The Code Browser
-================
+Code Browser
+============
 
 The code browser portion of the plugin is designed to replace the code browser
 built into Trac with a simple redirect to the GitHub source browser.
@@ -62,4 +63,10 @@ syntax in referring to Git commits.
 It tries to automatically detect if the commit is a valid SVN revision number,
 and in that case points it to Trac's builtin source browser instead of Github.
 (May be useful for projects converted from SVN...)
+
+Timeline
+========
+
+You can set the ``suppress_changesets`` option to suppress SVN changesets in
+the Timeline view.
 
