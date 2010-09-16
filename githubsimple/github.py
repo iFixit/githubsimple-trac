@@ -74,6 +74,7 @@ class GithubSimplePlugin(Component):
         url = req.path_info.replace('/browser', '')
         if not rev:
             rev = ''
+        url = req.path_info.replace('/trunk', '')
 
         redirect = '%s%s%s' % (browser, rev, url)
         self.env.log.debug("Redirect URL: %s" % redirect)
