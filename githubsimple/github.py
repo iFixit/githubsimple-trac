@@ -1,6 +1,8 @@
 import re
 import cgi
 import urllib
+import datetime
+from trac.util.datefmt import utc
 from trac.core import *
 from trac.config import Option, IntOption, ListOption, BoolOption
 from trac.web.api import IRequestFilter, IRequestHandler, Href
@@ -23,8 +25,12 @@ def is_svn_changeset_request(path_info):
     return False
 
 def monkeypatch_trac_timeline():
+    class Dummy(object):
+        rev = 'master-commits'
     def get_timeline_events(self, req, start, stop, filters):
-        return []
+        return [('changeset', datetime.datetime.now(utc), '',
+                    ([Dummy()], 'See Git commit log', False, False)
+                )]
     import trac.versioncontrol.web_ui.changeset
     trac.versioncontrol.web_ui.changeset.ChangesetModule.get_timeline_events = get_timeline_events
 
@@ -71,6 +77,9 @@ class GithubSimplePlugin(Component):
         if not url:
             browser = self.browser
             url = ''
+        if url.endswith('-commits'):
+            url = url[:-8]
+            browser = browser.replace('/commit/', '/commits/')
 
         redirect = '%s%s' % (browser, url)
         self.env.log.debug("Redirect URL: %s" % redirect)
