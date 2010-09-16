@@ -53,10 +53,13 @@ Changesets
 
 This plugin intercepts the /changeset url, which allows using::
 
-    changeset:98d9ffe2
+    git:98d9ffe2
 
-syntax to refer to Git commits.
+    commit:98d9ffe2
+
+syntax in referring to Git commits.
 
 It tries to automatically detect if the commit is a valid SVN revision number,
 and in that case points it to Trac's builtin source browser instead of Github.
 (May be useful for projects converted from SVN...)
+
