@@ -1,3 +1,4 @@
+import re
 from trac.core import *
 from trac.config import Option, IntOption, ListOption, BoolOption
 from trac.web.api import IRequestFilter, IRequestHandler, Href
@@ -11,6 +12,12 @@ def is_svn_rev(rev):
     if revno > 100000:
         return False
     return True
+
+def is_svn_changeset_request(path_info):
+    m = re.match('^/changeset/([^/]+).*?', path_info)
+    if m:
+        return is_svn_rev(m.group(1))
+    return False
 
 class GithubSimplePlugin(Component):
     implements(IRequestHandler, IRequestFilter)
@@ -31,7 +38,7 @@ class GithubSimplePlugin(Component):
                 self.processBrowserURL(req)
 
             serve2 = req.path_info.startswith('/changeset') \
-			and not is_svn_rev(req.path_info.replace('/changeset/', ''))
+			and not is_svn_changeset_request(req.path_info)
             self.env.log.debug("Handle Pre-Request /changeset: %s" % serve2)
             if serve2:
                 self.processChangesetURL(req)
