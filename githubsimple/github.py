@@ -96,5 +96,5 @@ class GithubSimplePlugin(Component):
             target = urllib.quote(target)
             return '<a href="%s%s">%s</a>' % ( browser, target, label)
 
-        return [('git', fmt)]
+        return [('git', fmt), ('commit', fmt)]
 
