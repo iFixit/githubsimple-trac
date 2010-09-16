@@ -1,7 +1,10 @@
 import re
+import cgi
+import urllib
 from trac.core import *
 from trac.config import Option, IntOption, ListOption, BoolOption
 from trac.web.api import IRequestFilter, IRequestHandler, Href
+from trac.wiki.api import IWikiSyntaxProvider
 from trac.util.translation import _
 
 def is_svn_rev(rev):
@@ -20,7 +23,7 @@ def is_svn_changeset_request(path_info):
     return False
 
 class GithubSimplePlugin(Component):
-    implements(IRequestHandler, IRequestFilter)
+    implements(IRequestHandler, IRequestFilter, IWikiSyntaxProvider)
     
     browser = Option('githubsimple', 'browser', '', doc="""Place your GitHub Source Browser URL here to have the /browser entry point redirect to GitHub.""")
 
@@ -81,4 +84,17 @@ class GithubSimplePlugin(Component):
         out = 'Going to GitHub: %s' % redirect
 
         req.redirect(redirect)
+
+    def get_wiki_syntax(self):
+        return []
+
+    def get_link_resolvers(self):
+        browser = self.browser.replace('/tree/master', '/commit/')
+        def fmt(formatter, ns, target, label):
+            if not label:
+                label = cgi.escape(target)
+            target = urllib.quote(target)
+            return '<a href="%s%s">%s</a>' % ( browser, target, label)
+
+        return [('git', fmt)]
 
