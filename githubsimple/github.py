@@ -83,11 +83,11 @@ class GithubSimplePlugin(Component):
         self.env.log.debug("processBrowserURL")
         browser = self.browser.replace('/master', '/')
         rev = req.args.get('rev')
-        
+
         url = req.path_info.replace('/browser', '')
         if not rev:
             rev = ''
-        url = req.path_info.replace('/trunk', '')
+        url = url.replace('/trunk', '')
 
         redirect = '%s%s%s' % (browser, rev, url)
         self.env.log.debug("Redirect URL: %s" % redirect)
