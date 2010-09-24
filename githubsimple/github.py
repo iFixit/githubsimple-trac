@@ -210,7 +210,7 @@ class GitRepo(object):
                             subject), ...
         """
         fmt_sep = '\x08'
-        fmt = ['%H', '%cN', '%aN', '%ct', '%s']
+        fmt = ['%H', '%cn', '%an', '%ct', '%s']
         cmd = ['log', '-100', '--all',
                '--pretty=format:' + fmt_sep.join(fmt)]
         if start:
