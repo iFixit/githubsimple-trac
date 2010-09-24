@@ -1,7 +1,10 @@
+import sys
+import os
 import re
 import cgi
 import urllib
 import datetime
+import subprocess
 from trac.util.datefmt import utc
 from trac.core import *
 from trac.config import Option, IntOption, ListOption, BoolOption
@@ -9,68 +12,100 @@ from trac.web.api import IRequestFilter, IRequestHandler, Href
 from trac.wiki.api import IWikiSyntaxProvider
 from trac.util.translation import _
 
-def is_svn_rev(rev):
-    try:
-        revno = int(rev)
-    except (TypeError, ValueError):
-        return False
-    if revno > 100000:
-        return False
-    return True
-
-def is_svn_changeset_request(path_info):
-    m = re.match('^/changeset/([^/]+).*?', path_info)
-    if m:
-        return is_svn_rev(m.group(1))
-    return False
-
-def monkeypatch_trac_timeline():
-    class Dummy(object):
-        rev = 'master-commits'
-    def get_timeline_events(self, req, start, stop, filters):
-        return [('changeset', datetime.datetime.now(utc), '',
-                    ([Dummy()], 'See Git commit log', False, False)
-                )]
-    import trac.versioncontrol.web_ui.changeset
-    trac.versioncontrol.web_ui.changeset.ChangesetModule.get_timeline_events = get_timeline_events
+class Revision(object):
+    def __init__(self, rev):
+        self.rev = rev
 
 class GithubSimplePlugin(Component):
     implements(IRequestHandler, IRequestFilter, IWikiSyntaxProvider)
-    
-    browser = Option('githubsimple', 'browser', '', doc="""Place your GitHub Source Browser URL here to have the /browser entry point redirect to GitHub.""")
-    suppress_changesets = BoolOption('githubsimple', 'suppress_changesets', False, doc="""Suppress SVN changesets in the timeline view""")
+
+    browser = Option('githubsimple', 'browser', '',
+        doc=("Place your GitHub Source Browser URL here to have "
+             "the /browser entry point redirect to GitHub."))
+    suppress_changesets = BoolOption('githubsimple', 'suppress_changesets',
+        False, doc="Suppress SVN changesets in the timeline view")
+    local_repo = Option('githubsimple', 'local_repo', '',
+        doc="Path to local repository")
+    secret_token = Option('githubsimple', 'secret_token', '',
+        doc="Secret token in the post-receive URL")
 
     def __init__(self):
         self.env.log.debug("Browser: %s" % self.browser)
-
+        if self.local_repo:
+            self.repo = GitRepo(self.local_repo)
+        else:
+            self.repo = None
+        self.process_hook = False
         if self.suppress_changesets:
-            monkeypatch_trac_timeline()
+            monkeypatch_trac_timeline(self)
 
-    # This has to be done via the pre_process_request handler
-    # Seems that the /browser request doesn't get routed to match_request :(
+    #--------------------------------------------------------------------------
+    # ITimelineEventProvider methods
+    #--------------------------------------------------------------------------
+
+    def get_timeline_events(self, req, start, stop, filters):
+        if 'changeset' not in filters:
+            return
+        if not self.repo:
+            yield ('changeset', datetime.datetime.now(utc), '',
+                   ([Revision("master-commits")], 'See Git commit log',
+                    False, False))
+            return
+
+        self.env.log.debug("Hey wtf: %r" % self.repo)
+        for rev, committer, author, date, subject in self.repo.log(start, stop):
+            if author != committer:
+                author = "%s [%s]" % (author, committer)
+            yield ('changeset', date, author,
+                   ([Revision(rev[:8])], subject, False, False))
+
+    #--------------------------------------------------------------------------
+    # IRequestHandler methods
+    #--------------------------------------------------------------------------
+
+    def match_request(self, req):
+        serve = (req.path_info.rstrip('/') == ('/github/%s' % self.secret_token)
+                 and req.method == 'POST'
+                 and self.secret_token)
+        if serve:
+            self.process_hook = True
+            # This is hacky but it's the only way I found to let Trac
+            # post to this request without a valid form_token
+            req.form_token = None
+
+        self.env.log.debug("Handle Request: %s" % serve)
+        return serve
+
     def pre_process_request(self, req, handler):
+        # This has to be done via the pre_process_request handler
+        # Seems that the /browser request doesn't get routed to match_request :(
         if self.browser:
             serve = req.path_info.startswith('/browser') \
                         and not is_svn_rev(req.args.get('rev'))
             self.env.log.debug("Handle Pre-Request /browser: %s" % serve)
             if serve:
-                self.processBrowserURL(req)
+                self.process_browser_url(req)
 
             serve2 = req.path_info.startswith('/changeset') \
                         and not is_svn_changeset_request(req.path_info)
             self.env.log.debug("Handle Pre-Request /changeset: %s" % serve2)
             if serve2:
-                self.processChangesetURL(req)
-
+                self.process_changeset_url(req)
         return handler
 
+    def process_request(self, req):
+        if self.process_hook:
+            self.process_commit_post(req)
 
     def post_process_request(self, req, template, data, content_type):
         return (template, data, content_type)
 
+    #--------------------------------------------------------------------------
+    # Request processing hooks
+    #--------------------------------------------------------------------------
 
-    def processChangesetURL(self, req):
-        self.env.log.debug("processChangesetURL")
+    def process_changeset_url(self, req):
+        self.env.log.debug("process_changeset_url")
         browser = self.browser.replace('/tree/master', '/commit/')
         
         url = req.path_info.replace('/changeset/', '')
@@ -87,9 +122,8 @@ class GithubSimplePlugin(Component):
 
         req.redirect(redirect)
 
-
-    def processBrowserURL(self, req):
-        self.env.log.debug("processBrowserURL")
+    def process_browser_url(self, req):
+        self.env.log.debug("process_browser_url")
         browser = self.browser.replace('/master', '/')
         rev = req.args.get('rev')
 
@@ -104,6 +138,16 @@ class GithubSimplePlugin(Component):
 
         req.redirect(redirect)
 
+    def process_commit_post(self, req):
+        data = req.args.get('payload')
+        if self.repo:
+            self.repo.fetch()
+        req.redirect("/")
+
+    #--------------------------------------------------------------------------
+    # IWikiSyntaxProvider methods
+    #--------------------------------------------------------------------------
+
     def get_wiki_syntax(self):
         return []
 
@@ -117,3 +161,131 @@ class GithubSimplePlugin(Component):
 
         return [('git', fmt), ('commit', fmt)]
 
+
+#------------------------------------------------------------------------------
+# Helper routines
+#------------------------------------------------------------------------------
+
+def is_svn_rev(rev):
+    try:
+        revno = int(rev)
+    except (TypeError, ValueError):
+        return False
+    if revno > 100000:
+        return False
+    return True
+
+def is_svn_changeset_request(path_info):
+    m = re.match('^/changeset/([^/]+).*?', path_info)
+    if m:
+        return is_svn_rev(m.group(1))
+    return False
+
+def monkeypatch_trac_timeline(new_self):
+    def get_timeline_events(self, req, start, stop, filters):
+        return new_self.get_timeline_events(req, start, stop, filters)
+    import trac.versioncontrol.web_ui.changeset
+    trac.versioncontrol.web_ui.changeset.ChangesetModule.get_timeline_events \
+        = get_timeline_events
+
+class GitRepo(object):
+    def __init__(self, repo):
+        self.repo = repo
+
+    def _git(self, *cmd):
+        cwd = os.getcwd()
+        try:
+            os.chdir(self.repo)
+            p = subprocess.Popen(['git'] + list(cmd),
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
+            out, err = p.communicate()
+            return out
+        finally:
+            os.chdir(cwd)
+
+    def log(self, start, end):
+        """
+        Generator yielding (hash, committer, author, commit_datetime,
+                            subject), ...
+        """
+        fmt_sep = '\x08'
+        fmt = ['%H', '%cN', '%aN', '%ct', '%s']
+        cmd = ['log', '--all',
+               '--pretty=format:' + fmt_sep.join(fmt)]
+        if start:
+            cmd.append(start.strftime('--since=%Y-%m-%d %H:%M:%S'))
+        if end:
+            cmd.append(end.strftime('--until=%Y-%m-%d %H:%M:%S'))
+
+        out = self._git(*cmd)
+        for entry in out.splitlines():
+            parts = entry.split(fmt_sep)
+            if len(parts) == len(fmt):
+                try:
+                    stamp = datetime.datetime.fromtimestamp(int(parts[3]), utc)
+                except ValueError:
+                    continue
+                yield (parts[0], parts[1], parts[2], stamp, parts[4])
+
+    def fetch(self):
+        self._git('fetch', '--all')
+
+
+#------------------------------------------------------------------------------
+# Communicating with Git
+#------------------------------------------------------------------------------
+
+class Cmd(object):
+    executable = None
+
+    def __init__(self, executable):
+        self.executable = executable
+
+    def _call(self, command, args, kw, repository=None, call=False):
+        cmd = [self.executable, command] + list(args)
+        cwd = None
+
+        if repository is not None:
+            cwd = os.getcwd()
+            os.chdir(repository)
+
+        try:
+            if call:
+                return subprocess.call(cmd, **kw)
+            else:
+                return subprocess.Popen(cmd, **kw)
+        finally:
+            if cwd is not None:
+                os.chdir(cwd)
+
+    def __call__(self, command, *a, **kw):
+        ret = self._call(command, a, {}, call=True, **kw)
+        if ret != 0:
+            raise RuntimeError("%s failed" % self.executable)
+
+    def pipe(self, command, *a, **kw):
+        stdin = kw.pop('stdin', None)
+        p = self._call(command, a, dict(stdin=stdin, stdout=subprocess.PIPE),
+                      call=False, **kw)
+        return p.stdout
+
+    def read(self, command, *a, **kw):
+        p = self._call(command, a, dict(stdout=subprocess.PIPE),
+                      call=False, **kw)
+        out, err = p.communicate()
+        if p.returncode != 0:
+            raise RuntimeError("%s failed" % self.executable)
+        return out
+
+    def readlines(self, command, *a, **kw):
+        out = self.read(command, *a, **kw)
+        return out.rstrip("\n").split("\n")
+
+    def test(self, command, *a, **kw):
+        ret = self._call(command, a, dict(stdout=subprocess.PIPE,
+                                          stderr=subprocess.PIPE),
+                        call=True, **kw)
+        return (ret == 0)
+
+git = Cmd("git")
