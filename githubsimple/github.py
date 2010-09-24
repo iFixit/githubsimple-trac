@@ -229,7 +229,7 @@ class GitRepo(object):
                 yield (parts[0], parts[1], parts[2], stamp, parts[4])
 
     def fetch(self):
-        self._git('fetch', '--all')
+        self._git('fetch')
 
 
 #------------------------------------------------------------------------------
