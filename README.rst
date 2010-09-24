@@ -64,11 +64,6 @@ Code Browser
 The code browser portion of the plugin is designed to replace the code browser
 built into Trac with a simple redirect to the GitHub source browser.
 
-Note that this will not make the commits appear in the timeline etc. You need
-the GitPlugin to do that: http://trac-hacks.org/wiki/GitPlugin
-
-Also, if you want that, consider using the full github-trac plugin.
-
 
 Changesets
 ==========
