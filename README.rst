@@ -2,11 +2,19 @@
 githubsimple-trac
 =================
 
-This is a simplified version of the Trac/Github integration plugin
-http://github.com/davglass/github-trac
+This is a simplified version (= no dependencies) of the Trac/Github
+integration plugin http://github.com/davglass/github-trac
 
-Many features and most dependencies are stripped, leaving only the browser/ and changeset/
-redirects.
+Features:
+
+- No additional dependencies
+
+- Get Timeline from the Git repository
+
+- Redirect code browsing and changeset viewing to Github
+  (for Git changesets)
+
+- ``commit:e6eafd`` syntax in Wiki for easy links to commits
 
 
 Installation
@@ -83,3 +91,7 @@ Timeline
 You can set the ``suppress_changesets`` option to suppress SVN changesets in
 the Timeline view.
 
+Also set ``local_repo`` and ``secret_token`` to get the Git commit log
+from a local repository. (Note that this mode has no caching -- it'll
+spawn ``git`` for each request, which you may need to remember if your
+server is heavily loaded.)
