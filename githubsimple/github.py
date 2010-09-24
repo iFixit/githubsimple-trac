@@ -211,7 +211,7 @@ class GitRepo(object):
         """
         fmt_sep = '\x08'
         fmt = ['%H', '%cN', '%aN', '%ct', '%s']
-        cmd = ['log', '--all',
+        cmd = ['log', '-100', '--all',
                '--pretty=format:' + fmt_sep.join(fmt)]
         if start:
             cmd.append(start.strftime('--since=%Y-%m-%d %H:%M:%S'))
