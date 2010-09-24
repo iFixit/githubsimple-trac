@@ -26,15 +26,28 @@ To install this Trac Plugin:
         sudo python setup.py install   # ... or something similar
 
     3. Configure Trac by editing your ``trac.ini``::
-        
+
         [components]
         githubsimple.* = enabled
 
         [githubsimple]
-        browser = http://github.com/davglass/tree/master
+        browser = http://github.com/davglass/tree/master    # your Github URL
         suppress_changesets = true
-        
-    4. All done.
+        local_repo = /path/to/local/repo          # optional
+	secret_token = somesecretword             # optional
+
+    4. (Optional) Clone your Git repo to some path in your Trac server,
+       if you specified ``local_repo``
+
+    5. (Optional) Configure Github Post-Receive URL to::
+
+        http://your.trac.domain/someproject/github/somesecretword
+
+       where ``somesecretwork`` should match what's in ``trac.ini``.
+       This will only invoke ``git fetch`` on the ``local_repo``
+       so that the timeline view stays up to date.
+
+    6. All done.
 
 
 Code Browser
