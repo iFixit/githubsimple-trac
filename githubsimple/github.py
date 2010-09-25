@@ -210,7 +210,7 @@ class GitRepo(object):
                             subject), ...
         """
         fmt_sep = '\x08'
-        fmt = ['%H', '%P', '%d', '%cn', '%an', '%ct', '%s']
+        fmt = ['%H', '%P', '%cn', '%an', '%ct', '%s']
         cmd = ['log', '-100', '--all',
                '--pretty=format:' + fmt_sep.join(fmt)]
         if start:
@@ -221,11 +221,26 @@ class GitRepo(object):
         desc_re = re.compile(r'\s*\((.*)\)\s*', re.S)
         branches = {}
 
+        # Read refs
+        out = self._git('show-ref')
+        for entry in out.splitlines():
+            parts = entry.split()
+            if len(parts) == 2:
+                commit, ref = parts
+                ref = ref.lstrip('refs/remotes/origin/')
+                ref = ref.lstrip('refs/heads/')
+                ref = ref.lstrip('refs/tags/')
+                ref = ref.strip()
+                if not ref or ref == 'HEAD':
+                    continue
+                branches.setdefault(commit, set()).add(ref)
+
+        # Read log
         out = self._git(*cmd)
         for entry in out.splitlines():
             parts = entry.split(fmt_sep)
             if len(parts) == len(fmt):
-                commit, parents, desc, committer, author, stamp, subject = parts
+                commit, parents, committer, author, stamp, subject = parts
 
                 # Format timestamp
                 try:
@@ -234,23 +249,11 @@ class GitRepo(object):
                     continue
 
                 # Trace branches (in cases where it can be done cheaply)
-                parents = parents.split()
-                m = desc_re.match(desc)
-                if m:
-                    desc = [x.strip().lstrip('origin/')
-                            for x in m.group(1).split(',')
-                            if x.strip()]
-                else:
-                    desc = []
-
-                refs = branches.get(commit, set())
-                refs.update(desc)
-                if 'HEAD' in refs:
-                    refs.remove('HEAD')
-                branches[commit] = refs
-                for parent in parents:
-                    # tag parents with current branch names
-                    branches.setdefault(parent, set()).update(refs)
+                refs = branches.get(commit, None)
+                if refs:
+                    for parent in parents.split():
+                        # tag parents with current branch names
+                        branches.setdefault(parent, set()).update(refs)
 
                 # Add branch names to subject
                 if refs:
