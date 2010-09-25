@@ -210,7 +210,7 @@ class GitRepo(object):
                             subject), ...
         """
         fmt_sep = '\x08'
-        fmt = ['%H', '%cn', '%an', '%ct', '%s']
+        fmt = ['%H', '%P', '%d', '%cn', '%an', '%ct', '%s']
         cmd = ['log', '-100', '--all',
                '--pretty=format:' + fmt_sep.join(fmt)]
         if start:
@@ -218,15 +218,46 @@ class GitRepo(object):
         if end:
             cmd.append(end.strftime('--until=%Y-%m-%d %H:%M:%S'))
 
+        desc_re = re.compile(r'\s*\((.*)\)\s*', re.S)
+        branches = {}
+
         out = self._git(*cmd)
         for entry in out.splitlines():
             parts = entry.split(fmt_sep)
             if len(parts) == len(fmt):
+                commit, parents, desc, committer, author, stamp, subject = parts
+
+                # Format timestamp
                 try:
-                    stamp = datetime.datetime.fromtimestamp(int(parts[3]), utc)
+                    stamp = datetime.datetime.fromtimestamp(int(stamp), utc)
                 except ValueError:
                     continue
-                yield (parts[0], parts[1], parts[2], stamp, parts[4])
+
+                # Trace branches (in cases where it can be done cheaply)
+                parents = parents.split()
+                m = desc_re.match(desc)
+                if m:
+                    desc = [x.strip().lstrip('origin/')
+                            for x in m.group(1).split(',')
+                            if x.strip()]
+                else:
+                    desc = []
+
+                refs = branches.get(commit, set())
+                refs.update(desc)
+                if 'HEAD' in refs:
+                    refs.remove('HEAD')
+                branches[commit] = refs
+                for parent in parents:
+                    # tag parents with current branch names
+                    branches.setdefault(parent, set()).update(refs)
+
+                # Add branch names to subject
+                if refs:
+                    subject = "[%s] %s" % (", ".join(sorted(refs)), subject)
+
+                # Send forward
+                yield (commit, committer, author, stamp, subject)
 
     def fetch(self):
         self._git('fetch')
