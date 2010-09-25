@@ -227,9 +227,12 @@ class GitRepo(object):
             parts = entry.split()
             if len(parts) == 2:
                 commit, ref = parts
-                ref = ref.lstrip('refs/remotes/origin/')
-                ref = ref.lstrip('refs/heads/')
-                ref = ref.lstrip('refs/tags/')
+                if ref.startswith('refs/heads/'):
+                    ref = ref[11:]
+                elif ref.startswith('refs/remotes/origin/'):
+                    ref = ref[20:]
+                else:
+                    continue
                 ref = ref.strip()
                 if not ref or ref == 'HEAD':
                     continue
