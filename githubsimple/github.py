@@ -11,10 +11,7 @@ from trac.config import Option, IntOption, ListOption, BoolOption
 from trac.web.api import IRequestFilter, IRequestHandler, Href
 from trac.wiki.api import IWikiSyntaxProvider
 from trac.util.translation import _
-
-class Revision(object):
-    def __init__(self, rev):
-        self.rev = rev
+from genshi.builder import tag
 
 class GithubSimplePlugin(Component):
     implements(IRequestHandler, IRequestFilter, IWikiSyntaxProvider)
@@ -43,21 +40,38 @@ class GithubSimplePlugin(Component):
     # ITimelineEventProvider methods
     #--------------------------------------------------------------------------
 
+    def get_timeline_filters(self, req):
+        if 'CHANGESET_VIEW' in req.perm:
+            return [('changeset', _('Changesets'))]
+        else:
+            return []
+
     def get_timeline_events(self, req, start, stop, filters):
         if 'changeset' not in filters:
             return
         if not self.repo:
             yield ('changeset', datetime.datetime.now(utc), '',
-                   ([Revision("master-commits")], 'See Git commit log',
-                    False, False))
+                   ("master-commits", 'See Git commit log'), self)
             return
 
-        self.env.log.debug("Hey wtf: %r" % self.repo)
         for rev, committer, author, date, subject in self.repo.log(start, stop):
             if author != committer:
                 author = "%s [%s]" % (author, committer)
-            yield ('changeset', date, author,
-                   ([Revision(rev[:8])], subject, False, False))
+            yield ('changeset', date, author, (rev[:8], subject), self)
+
+    def render_timeline_event(self, context, field, event):
+        kind, date, author, data, provider = event
+        rev, message = data
+
+        if field == 'url':
+            return context.href.changeset(rev)
+        elif field == 'description':
+            return message
+        elif field == 'title':
+            title = tag(_("Commit "), tag.em('[%s]' % rev))
+            return title
+        else:
+            raise NotImplementedError()
 
     #--------------------------------------------------------------------------
     # IRequestHandler methods
