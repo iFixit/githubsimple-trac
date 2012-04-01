@@ -10,11 +10,12 @@ from trac.core import *
 from trac.config import Option, IntOption, ListOption, BoolOption
 from trac.web.api import IRequestFilter, IRequestHandler, Href
 from trac.wiki.api import IWikiSyntaxProvider
+from trac.timeline.api import ITimelineEventProvider
 from trac.util.translation import _
 from genshi.builder import tag
 
 class GithubSimplePlugin(Component):
-    implements(IRequestHandler, IRequestFilter, IWikiSyntaxProvider)
+    implements(IRequestHandler, IRequestFilter, IWikiSyntaxProvider, ITimelineEventProvider)
 
     browser = Option('githubsimple', 'browser', '',
         doc=("Place your GitHub Source Browser URL here to have "
@@ -34,7 +35,7 @@ class GithubSimplePlugin(Component):
             self.repo = None
         self.process_hook = False
         if self.suppress_changesets:
-            monkeypatch_trac_timeline(self)
+            monkeypatch_trac_timeline()
 
     #--------------------------------------------------------------------------
     # ITimelineEventProvider methods
@@ -197,9 +198,9 @@ def is_svn_changeset_request(path_info):
         return is_svn_rev(m.group(1))
     return False
 
-def monkeypatch_trac_timeline(new_self):
+def monkeypatch_trac_timeline():
     def get_timeline_events(self, req, start, stop, filters):
-        return new_self.get_timeline_events(req, start, stop, filters)
+        return []
     import trac.versioncontrol.web_ui.changeset
     trac.versioncontrol.web_ui.changeset.ChangesetModule.get_timeline_events \
         = get_timeline_events
