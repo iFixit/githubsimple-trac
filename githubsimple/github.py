@@ -166,7 +166,11 @@ class GithubSimplePlugin(Component):
     #--------------------------------------------------------------------------
 
     def get_wiki_syntax(self):
-        return []
+        browser = self.browser.replace('/tree/master', '/commit/')
+        def commit_link(formatter, ns, match):
+           commit = match.group('hash')
+           return '<a href="%s%s">%s</a>' % (browser, commit, commit[:8])
+        yield (r"\[(?P<hash>[a-f0-9]{8,})\]", commit_link)
 
     def get_link_resolvers(self):
         browser = self.browser.replace('/tree/master', '/commit/')
