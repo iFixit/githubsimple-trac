@@ -173,14 +173,22 @@ class GithubSimplePlugin(Component):
         yield (r"\[(?P<hash>[a-f0-9]{8,})\]", commit_link)
 
     def get_link_resolvers(self):
-        browser = self.browser.replace('/tree/master', '/commit/')
-        def fmt(formatter, ns, target, label):
+        commit_url = self.browser.replace('/tree/master', '/commit/')
+        pull_url = self.browser.replace('/tree/master', '/pull/')
+        def commit_link(formatter, ns, target, label):
             if not label:
                 label = cgi.escape(target)
             target = urllib.quote(target)
-            return '<a href="%s%s">%s</a>' % ( browser, target, label)
+            return '<a href="%s%s">%s</a>' % ( commit_url, target, label)
 
-        return [('git', fmt), ('commit', fmt)]
+        def pull_link(formatter, ns, target, label):
+            label = "pull-request:" + cgi.escape(target)
+            target = urllib.quote(target)
+            return '<a href="%s%s">%s</a>' % ( pull_url, target,  label)
+
+        return [('git', commit_link),
+                ('commit', commit_link),
+                ('pull', pull_link)]
 
 
 #------------------------------------------------------------------------------
